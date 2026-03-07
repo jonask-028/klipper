@@ -279,10 +279,13 @@ class NeptuneScreen:
         self.reactor.register_timer(
             self._reset_screen, self.reactor.monotonic())
 
-        pled = self.printer.lookup_object("led")
-        self.leds =  [
-            pled.led_helpers.get(n) for n in pled.led_helpers.keys()
-        ]
+        pled = self.printer.lookup_object("led", None)
+        if pled is not None:
+            self.leds = [
+                pled.led_helpers.get(n) for n in pled.led_helpers.keys()
+            ]
+        else:
+            self.leds = []
 
         #for n in self.printer.lookup_objects():
         #    self.log(f"object: {n}" )
