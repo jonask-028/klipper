@@ -49,11 +49,13 @@ class HallFilamentWidthSensor:
         # Start adc
         self.ppins = self.printer.lookup_object('pins')
         self.mcu_adc = self.ppins.setup_pin('adc', self.pin1)
-        self.mcu_adc.setup_minmax(ADC_SAMPLE_TIME, ADC_SAMPLE_COUNT)
-        self.mcu_adc.setup_adc_callback(ADC_REPORT_TIME, self.adc_callback)
+        self.mcu_adc.setup_adc_sample(ADC_REPORT_TIME,
+                                      ADC_SAMPLE_TIME, ADC_SAMPLE_COUNT)
+        self.mcu_adc.setup_adc_callback(self.adc_callback)
         self.mcu_adc2 = self.ppins.setup_pin('adc', self.pin2)
-        self.mcu_adc2.setup_minmax(ADC_SAMPLE_TIME, ADC_SAMPLE_COUNT)
-        self.mcu_adc2.setup_adc_callback(ADC_REPORT_TIME, self.adc2_callback)
+        self.mcu_adc2.setup_adc_sample(ADC_REPORT_TIME,
+                                       ADC_SAMPLE_TIME, ADC_SAMPLE_COUNT)
+        self.mcu_adc2.setup_adc_callback(self.adc2_callback)
         # extrude factor updating
         self.extrude_factor_update_timer = self.reactor.register_timer(
             self.extrude_factor_update_event)
@@ -83,12 +85,14 @@ class HallFilamentWidthSensor:
         self.reactor.update_timer(self.extrude_factor_update_timer,
                                   self.reactor.NOW)
 
-    def adc_callback(self, read_time, read_value):
+    def adc_callback(self, samples):
         # read sensor value
+        read_time, read_value = samples[-1]
         self.lastFilamentWidthReading = round(read_value * 10000)
 
-    def adc2_callback(self, read_time, read_value):
+    def adc2_callback(self, samples):
         # read sensor value
+        read_time, read_value = samples[-1]
         self.lastFilamentWidthReading2 = round(read_value * 10000)
         # calculate diameter
         diameter_new = round((self.dia2 - self.dia1)/
@@ -125,7 +129,7 @@ class HallFilamentWidthSensor:
         # Update filament array for lastFilamentWidthReading
         self.update_filament_array(last_epos)
         # Check runout
-        self.runout_helper.note_filament_present(
+        self.runout_helper.note_filament_present(eventtime,
             self.runout_dia_min <= self.diameter <= self.runout_dia_max)
         # Does filament exists
         if self.diameter > 0.5:
@@ -209,10 +213,12 @@ class HallFilamentWidthSensor:
                       +self.lastFilamentWidthReading2))
         gcmd.respond_info(response)
     def get_status(self, eventtime):
-        return {'Diameter': self.diameter,
+        status = self.runout_helper.get_status(eventtime)
+        status.update({'Diameter': self.diameter,
                 'Raw':(self.lastFilamentWidthReading+
                  self.lastFilamentWidthReading2),
-                'is_active':self.is_active}
+                'is_active':self.is_active})
+        return status
     def cmd_log_enable(self, gcmd):
         self.is_log = True
         gcmd.respond_info("Filament width logging Turned On")
