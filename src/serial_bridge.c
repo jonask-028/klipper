@@ -1,6 +1,6 @@
 // Support for serial port bridging
 //
-// Copyright (C) 2019  Kevin O'Connor <kevin@koconnor.net>
+// Copyright (C) 2023  E4ST2W3ST
 //
 // This file may be distributed under the terms of the GNU GPLv3 license.
 
