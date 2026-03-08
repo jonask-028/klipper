@@ -1,7 +1,6 @@
 # Support for "serial bridge"
 #
-# Copyright (C) 2023  E4ST2W3ST
-# Copyright (C) 2026  Jonas Kennedy
+# Copyright (C) 2019-2020  Kevin O'Connor <kevin@koconnor.net>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging, re
@@ -27,12 +26,6 @@ class SerialBridge:
         self.printer.register_event_handler("klippy:disconnect",
             self.handle_disconnect)
         self.bridges = {}
-        # Register webhooks API endpoints
-        webhooks = self.printer.lookup_object('webhooks')
-        webhooks.register_endpoint("serial_bridge/send",
-            self._handle_api_send)
-        webhooks.register_mux_endpoint("serial_bridge/subscribe",
-            "bridge", None, self._handle_api_subscribe_default)
 
     def handle_ready(self):
         self._ready = True
@@ -55,11 +48,6 @@ class SerialBridge:
 
     def setup_bridge(self, bridge):
         self.bridges[bridge.name.split()[-1]] = bridge
-        # Register mux endpoint for this specific bridge
-        webhooks = self.printer.lookup_object('webhooks')
-        webhooks.register_mux_endpoint("serial_bridge/subscribe",
-            "bridge", bridge.name.split()[-1],
-            self._handle_api_subscribe)
 
     def cmd_SERIAL_BRIDGE_LIST_CONFIGS(self, gcmd):
         gcmd.respond_info((", ".join(self.configs)))
@@ -102,38 +90,6 @@ class SerialBridge:
         replaced_bytes.extend(input_string[last_index:].encode('utf-8'))
 
         return replaced_bytes
-
-    # Webhooks API handlers
-    def _handle_api_send(self, web_request):
-        bridge_name = web_request.get_str("bridge")
-        data = web_request.get_str("data")
-        if bridge_name not in self.bridges:
-            raise web_request.error("Unknown bridge '%s'" % (bridge_name,))
-        self.bridges[bridge_name].send_serial(
-            self.perform_replacement(data))
-        web_request.send({})
-
-    def _handle_api_subscribe_default(self, web_request):
-        raise web_request.error("'bridge' parameter is required")
-
-    def _handle_api_subscribe(self, web_request):
-        bridge_name = web_request.get_str("bridge")
-        if bridge_name not in self.bridges:
-            raise web_request.error("Unknown bridge '%s'" % (bridge_name,))
-        cconn = web_request.get_client_connection()
-        template = web_request.get_dict('response_template', {})
-        bridge = self.bridges[bridge_name]
-        bridge.register_callback(
-            lambda data, c=cconn, t=template:
-                self._api_response(c, t, data))
-        web_request.send({"bridge": bridge_name})
-
-    def _api_response(self, cconn, template, data):
-        if cconn.is_closed():
-            return
-        msg = dict(template)
-        msg['params'] = {'data': list(data)}
-        cconn.send(msg)
 
 class PrinterSerialBridge:
     def __init__(self, config):
@@ -207,7 +163,7 @@ class PrinterSerialBridge:
 
         data = bytearray(data)
 
-        for callback in list(self.callbacks):
+        for callback in self.callbacks:
             callback(data)
 
     def handle_ready(self):
